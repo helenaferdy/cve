@@ -253,11 +253,11 @@ document.addEventListener('alpine:init', () => {
                 const now = new Date();
                 const diffMs = now.getTime() - utcDate.getTime();
                 const diffMins = Math.floor(diffMs / 60000);
-                if (diffMins < 0) return "latest updated just now";
+                if (diffMins < 0) return "last updated just now";
                 const hours = Math.floor(diffMins / 60);
                 const mins = diffMins % 60;
-                if (hours === 0) return `latest updated ${mins} mins ago`;
-                return `latest updated ${hours} hours ${mins} mins ago`;
+                if (hours === 0) return `last updated ${mins} mins ago`;
+                return `last updated ${hours} hours ${mins} mins ago`;
             } catch (e) {
                 console.error("Error parsing sync time:", e);
                 return this.syncStatus.last_sync;

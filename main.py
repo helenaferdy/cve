@@ -75,6 +75,7 @@ def is_version_impacted(target_version: str, impacted_json: dict) -> bool:
     min_str = impacted_json.get("min")
     max_str = impacted_json.get("max")
     fixed_str = impacted_json.get("fixed")
+    min_parts = []
     
     if min_str:
         min_parts = parse_version(min_str)
@@ -93,9 +94,12 @@ def is_version_impacted(target_version: str, impacted_json: dict) -> bool:
     if max_str:
         max_parts = parse_version(max_str)
         if max_parts:
-            olap = min(len(target_parts), len(max_parts))
-            if target_parts[:olap] > max_parts[:olap]:
-                return False
+            if min_parts and version_compare(min_parts, max_parts) > 0:
+                pass
+            else:
+                olap = min(len(target_parts), len(max_parts))
+                if target_parts[:olap] > max_parts[:olap]:
+                    return False
             
     return True
 

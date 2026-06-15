@@ -2,8 +2,10 @@ import re
 import json
 import datetime
 import logging
+import time
 import xml.etree.ElementTree as ET
 import requests
+from urllib.parse import quote as url_quote
 from database import init_db, save_cve, log_system_sync, get_db_connection, save_validation_log
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -457,36 +459,226 @@ def discover_from_cisco_rss():
     return discovered
 
 
+def _nvd_paginated_fetch(base_url, max_pages=10, delay=8.0):
+    """Fetch all pages from an NVD API query, respecting NVD rate limits (5 req/30s)."""
+    results = []
+    total = 99999  # sentinel — will be set from first response
+    for page in range(max_pages):
+        start_idx = page * 50
+        if start_idx >= total:
+            break
+        url = f"{base_url}&startIndex={start_idx}&resultsPerPage=50"
+        for attempt in range(3):
+            try:
+                time.sleep(delay)
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 429:
+                    logger.debug("NVD rate limit hit, waiting 35s...")
+                    time.sleep(35)
+                    continue
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                vulns = data.get("vulnerabilities", [])
+                total = data.get("totalResults", 0)
+                if not vulns:
+                    break
+                results.extend(vulns)
+                break  # success
+            except Exception as e:
+                logger.debug("NVD paginated fetch failed at page %d: %s", page, str(e))
+                if attempt == 2:
+                    break
+        else:
+            continue  # all retries exhausted for this page
+        # reached via break in inner try — success; now check if more pages
+    return results
+
+# Known vendor CVE source identifiers — used to catch CVEs that lack vendor keywords
+_NVD_VENDOR_SOURCES = {
+    "cve@checkpoint.com": "checkpoint",
+    "psirt@fortinet.com": "fortinet",
+    "fortiguard@fortinet.com": "fortinet",
+    "psirt@paloaltonetworks.com": "paloalto",
+    "psirt@cisco.com": "cisco",
+}
+
+def discover_from_nvd_by_source():
+    """Catch CVEs published by known vendor CNAs, even if description lacks vendor keywords.
+    Uses 2-day windows to avoid NVD pagination depth limits."""
+    logger.info("Discovering CVEs from NVD by sourceIdentifier (last 7 days)...")
+    discovered = []
+    seen_ids = set()
+
+    end = datetime.datetime.utcnow()
+
+    # 1-day windows — consistent page depth catches CVEs regardless of NVD sort order
+    window_configs = [
+        (1, 0, 10),  # today
+        (2, 1, 8),   # yesterday
+        (3, 2, 8),   # 2 days ago
+        (4, 3, 6),   # 3 days ago
+        (5, 4, 4),   # 4 days ago
+        (6, 5, 4),   # 5 days ago
+    ]
+    for start_days_ago, end_days_ago, max_pages in window_configs:
+        window_start = end - datetime.timedelta(days=start_days_ago)
+        window_end = end - datetime.timedelta(days=end_days_ago)
+
+        base_url = (
+            f"https://services.nvd.nist.gov/rest/json/cves/2.0"
+            f"?pubStartDate={window_start.strftime('%Y-%m-%dT00:00:00.000')}"
+            f"&pubEndDate={window_end.strftime('%Y-%m-%dT23:59:59.999')}"
+        )
+
+        vulns = _nvd_paginated_fetch(base_url, max_pages=max_pages)
+        logger.info("NVD source sweep [%s to %s]: fetched %d CVEs",
+                    window_start.strftime('%m-%d'), window_end.strftime('%m-%d'), len(vulns))
+
+        for vuln in vulns:
+            cve_data = vuln.get("cve", {})
+            cve_id = cve_data.get("id", "")
+            source_id = cve_data.get("sourceIdentifier", "")
+            if not cve_id or cve_id in seen_ids or source_id not in _NVD_VENDOR_SOURCES:
+                continue
+            seen_ids.add(cve_id)
+
+            vendor_key = _NVD_VENDOR_SOURCES[source_id]
+            cvss_score = 0.0
+            severity = "Unknown"
+            metrics = cve_data.get("metrics", {})
+            for metric_key in ["cvssMetricV31", "cvssMetricV30", "cvssMetricV2"]:
+                metric_list = metrics.get(metric_key, [])
+                if metric_list:
+                    cvss_data = metric_list[0].get("cvssData", {})
+                    cvss_score = cvss_data.get("baseScore", 0.0)
+                    severity = cvss_data.get("baseSeverity", "Unknown")
+                    break
+
+            summary = ""
+            for desc in cve_data.get("descriptions", []):
+                if desc.get("lang") == "en":
+                    summary = desc.get("value", "")
+                    break
+
+            discovered.append({
+                "cve_id": cve_id,
+                "vendor": vendor_key,
+                "product": "gaia" if vendor_key == "checkpoint" else vendor_key,
+                "publish_date": cve_data.get("published", ""),
+                "summary": summary,
+                "remediation": "",
+                "cvss_score": cvss_score,
+                "severity": severity,
+                "sources": [{"label": "NIST NVD", "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}"}],
+                "raw_version_text": "",
+                "discovery_source": "nvd_source",
+            })
+
+    logger.info("NVD source sweep: matched %d vendor CVEs", len(discovered))
+    return discovered
+
+
+def discover_from_nvd_by_cpe():
+    """Find CVEs matching vendor CPE strings — catches CVEs with proper CPEs."""
+    logger.info("Discovering CVEs from NVD by CPE match...")
+    discovered = []
+
+    cpe_queries = [
+        ("cpe:2.3:a:checkpoint:*:*:*:*:*:*:*", "checkpoint", "gaia"),
+        ("cpe:2.3:a:fortinet:*:*:*:*:*:*:*", "fortinet", "fortios"),
+        ("cpe:2.3:a:paloaltonetworks:*:*:*:*:*:*:*", "paloalto", "pan-os"),
+        ("cpe:2.3:o:paloaltonetworks:*:*:*:*:*:*:*", "paloalto", "pan-os"),
+        ("cpe:2.3:a:cisco:*:*:*:*:*:*:*", "cisco", "cisco"),
+        ("cpe:2.3:o:cisco:*:*:*:*:*:*:*", "cisco", "cisco"),
+    ]
+
+    end = datetime.datetime.utcnow()
+    start = end - datetime.timedelta(days=90)
+
+    for cpe, vendor_key, default_product in cpe_queries:
+        try:
+            base_url = (
+                f"https://services.nvd.nist.gov/rest/json/cves/2.0"
+                    f"?virtualMatchString={url_quote(cpe, safe='')}"
+                f"&pubStartDate={start.strftime('%Y-%m-%dT00:00:00.000')}"
+                f"&pubEndDate={end.strftime('%Y-%m-%dT23:59:59.999')}"
+            )
+            vulns = _nvd_paginated_fetch(base_url, max_pages=5)
+            logger.info("NVD CPE '%s': fetched %d results", cpe[:40], len(vulns))
+
+            for vuln in vulns:
+                cve_data = vuln.get("cve", {})
+                cve_id = cve_data.get("id", "")
+                if not cve_id:
+                    continue
+
+                cvss_score = 0.0
+                severity = "Unknown"
+                metrics = cve_data.get("metrics", {})
+                for metric_key in ["cvssMetricV31", "cvssMetricV30", "cvssMetricV2"]:
+                    metric_list = metrics.get(metric_key, [])
+                    if metric_list:
+                        cvss_data = metric_list[0].get("cvssData", {})
+                        cvss_score = cvss_data.get("baseScore", 0.0)
+                        severity = cvss_data.get("baseSeverity", "Unknown")
+                        break
+
+                summary = ""
+                for desc in cve_data.get("descriptions", []):
+                    if desc.get("lang") == "en":
+                        summary = desc.get("value", "")
+                        break
+
+                discovered.append({
+                    "cve_id": cve_id,
+                    "vendor": vendor_key,
+                    "product": default_product,
+                    "publish_date": cve_data.get("published", ""),
+                    "summary": summary,
+                    "remediation": "",
+                    "cvss_score": cvss_score,
+                    "severity": severity,
+                    "sources": [{"label": "NIST NVD", "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}"}],
+                    "raw_version_text": "",
+                    "discovery_source": "nvd_cpe",
+                })
+        except Exception as e:
+            logger.debug("NVD CPE search for '%s' failed: %s", cpe[:40], str(e))
+
+    logger.info("NVD CPE search: discovered %d CVEs", len(discovered))
+    return discovered
+
+
+_discover_from_nvd_keywords_queries = [
+    ("checkpoint gaia", "checkpoint", "gaia"),
+    ("check point quantum", "checkpoint", "gaia"),
+    ("check point security gateway", "checkpoint", "gaia"),
+    ("checkpoint firewall", "checkpoint", "gaia"),
+    ("check point vpn", "checkpoint", "gaia"),
+]
+
+
 def discover_from_nvd_keywords():
     """Search NVD by keyword for Check Point and other vendors without RSS feeds."""
     logger.info("Discovering CVEs from NVD keyword search...")
     discovered = []
     product_map = VENDOR_PRODUCT_MAP.get("checkpoint", {})
 
-    keyword_queries = [
-        ("checkpoint gaia", "checkpoint", "gaia"),
-        ("check point quantum", "checkpoint", "gaia"),
-        ("check point security gateway", "checkpoint", "gaia"),
-    ]
+    end = datetime.datetime.utcnow()
+    start = end - datetime.timedelta(days=90)
 
-    for query, vendor_key, default_product in keyword_queries:
+    for query, vendor_key, default_product in _discover_from_nvd_keywords_queries:
         try:
-            # Search recent CVEs (last 90 days)
-            end = datetime.datetime.utcnow()
-            start = end - datetime.timedelta(days=90)
-            url = (
+            base_url = (
                 f"https://services.nvd.nist.gov/rest/json/cves/2.0"
                 f"?keywordSearch={query.replace(' ', '+')}"
                 f"&pubStartDate={start.strftime('%Y-%m-%dT00:00:00.000')}"
                 f"&pubEndDate={end.strftime('%Y-%m-%dT23:59:59.999')}"
-                f"&resultsPerPage=50"
             )
-            response = requests.get(url, timeout=10)
-            if response.status_code != 200:
-                continue
+            vulns = _nvd_paginated_fetch(base_url, max_pages=5)
 
-            data = response.json()
-            for vuln in data.get("vulnerabilities", []):
+            for vuln in vulns:
                 cve_data = vuln.get("cve", {})
                 cve_id = cve_data.get("id", "")
                 if not cve_id:
@@ -532,7 +724,7 @@ def discover_from_nvd_keywords():
                     "discovery_source": "nvd_keywords",
                 })
 
-            logger.info("NVD keyword '%s': found %d results", query, len(data.get("vulnerabilities", [])))
+            logger.info("NVD keyword '%s': found %d results", query, len(vulns))
         except Exception as e:
             logger.debug("NVD keyword search for '%s' failed: %s", query, str(e))
 
@@ -542,6 +734,35 @@ def discover_from_nvd_keywords():
 # =============================================================================
 # ADVISORY DETAIL FETCHERS
 # =============================================================================
+
+def _fetch_nvd_cvss(cve_id):
+    """Fetch CVSS score and severity from NVD API for any CVE. Returns dict."""
+    result = {"cvss_score": 0.0, "severity": ""}
+    try:
+        nvd_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id}"
+        resp = requests.get(nvd_url, timeout=3)
+        if resp.status_code != 200:
+            return result
+        data = resp.json()
+        vulns = data.get("vulnerabilities", [])
+        if not vulns:
+            return result
+        metrics = vulns[0].get("cve", {}).get("metrics", {})
+        for metric_key in ["cvssMetricV31", "cvssMetricV30", "cvssMetricV2"]:
+            metric_list = metrics.get(metric_key, [])
+            if metric_list:
+                cvss_data = metric_list[0].get("cvssData", {})
+                cvss = cvss_data.get("baseScore", 0.0)
+                sev = cvss_data.get("baseSeverity", "")
+                if cvss and cvss != 0.0:
+                    result["cvss_score"] = float(cvss)
+                if sev:
+                    result["severity"] = sev
+                break
+    except Exception:
+        pass
+    return result
+
 
 def fetch_fortinet_advisory_detail(ir_number, cve_id):
     """Fetch CVSS, severity, product, and version info from a Fortinet PSIRT advisory page."""
@@ -695,12 +916,23 @@ def find_fortinet_advisory_url(cve_id):
 
 
 def fetch_paloalto_advisory_detail(cve_id):
-    """Fetch CVSS, severity, and version info from Palo Alto advisory page."""
+    """Fetch CVSS, severity, and version info from Palo Alto advisory page and NVD."""
+    result = {
+        "raw_version_text": "",
+        "cvss_score": 0.0,
+        "severity": "",
+    }
     try:
+        nvd_cvss = _fetch_nvd_cvss(cve_id)
+        if nvd_cvss.get("cvss_score"):
+            result["cvss_score"] = nvd_cvss["cvss_score"]
+        if nvd_cvss.get("severity"):
+            result["severity"] = nvd_cvss["severity"]
+
         url = f"https://security.paloaltonetworks.com/{cve_id}"
         response = requests.get(url, timeout=10)
         if response.status_code != 200:
-            return ""
+            return result
         html = response.text
 
         version_parts = []
@@ -717,20 +949,33 @@ def fetch_paloalto_advisory_detail(cve_id):
         elif lt_matches:
             version_parts.append(f"Fixed in {lt_matches[0]}")
 
-        return ", ".join(version_parts) if version_parts else ""
+        result["raw_version_text"] = ", ".join(version_parts) if version_parts else ""
+        return result
     except Exception as e:
         logger.debug("Palo Alto advisory fetch for %s failed: %s", cve_id, str(e))
-        return ""
+        return result
 
 
-def fetch_cisco_advisory_detail(advisory_url):
-    """Fetch affected version info from a Cisco Security Advisory page."""
+def fetch_cisco_advisory_detail(advisory_url, cve_id=""):
+    """Fetch CVSS, severity, and version info from a Cisco Security Advisory page and NVD."""
+    result = {
+        "raw_version_text": "",
+        "cvss_score": 0.0,
+        "severity": "",
+    }
     if not advisory_url:
-        return ""
+        return result
     try:
+        if cve_id:
+            nvd_cvss = _fetch_nvd_cvss(cve_id)
+            if nvd_cvss.get("cvss_score"):
+                result["cvss_score"] = nvd_cvss["cvss_score"]
+            if nvd_cvss.get("severity"):
+                result["severity"] = nvd_cvss["severity"]
+
         response = requests.get(advisory_url, timeout=10)
         if response.status_code != 200:
-            return ""
+            return result
         html = response.text
 
         version_parts = []
@@ -752,35 +997,43 @@ def fetch_cisco_advisory_detail(advisory_url):
             if not any(m in p for p in version_parts):
                 version_parts.append(f"Fixed in {m}")
 
-        result = ", ".join(version_parts) if version_parts else ""
-        logger.info("Cisco advisory %s: extracted version text: %s", advisory_url, result[:100] if result else "none")
+        result["raw_version_text"] = ", ".join(version_parts) if version_parts else ""
+        logger.info("Cisco advisory %s: extracted version text: %s", advisory_url, result["raw_version_text"][:100] if result["raw_version_text"] else "none")
         return result
     except Exception as e:
         logger.debug("Cisco advisory fetch for %s failed: %s", advisory_url, str(e))
-        return ""
+        return result
 
 
 def fetch_checkpoint_advisory_detail(cve_id):
-    """Fetch affected version info for a Check Point CVE from their advisory portal."""
+    """Fetch CVSS, severity, and version info for a Check Point CVE from NVD and advisory portals."""
+    result = {
+        "raw_version_text": "",
+        "cvss_score": 0.0,
+        "severity": "",
+    }
     try:
-        # Check Point uses SK numbers — try searching from the NVD reference or direct URL
-        # First try the Check Point advisory portal
         urls_to_try = [
             f"https://support.checkpoint.com/results/{cve_id}",
             f"https://supportcontent.checkpoint.com/solutions?id=sk{cve_id.replace('CVE-', '').replace('-', '')}",
         ]
-        # Also try the NVD page for version info
         nvd_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id}"
 
         try:
+            nvd_cvss = _fetch_nvd_cvss(cve_id)
+            if nvd_cvss.get("cvss_score"):
+                result["cvss_score"] = nvd_cvss["cvss_score"]
+            if nvd_cvss.get("severity"):
+                result["severity"] = nvd_cvss["severity"]
+
             resp = requests.get(nvd_url, timeout=3)
             if resp.status_code == 200:
                 data = resp.json()
                 vulns = data.get("vulnerabilities", [])
                 if vulns:
-                    metrics = vulns[0].get("cve", {}).get("metrics", {})
-                    # Try to extract version info from NVD configurations
-                    configs = vulns[0].get("cve", {}).get("configurations", [])
+                    cve_node = vulns[0].get("cve", {})
+                    # Extract version info from NVD configurations
+                    configs = cve_node.get("configurations", [])
                     version_parts = []
                     for config in configs:
                         for node in config.get("nodes", []):
@@ -792,13 +1045,18 @@ def fetch_checkpoint_advisory_detail(cve_id):
                                     if v_start and v_end:
                                         version_parts.append(f"{v_start} through {v_end}")
                     if version_parts:
-                        result = ", ".join(version_parts)
-                        logger.info("Check Point %s: extracted from NVD configs: %s", cve_id, result[:100])
-                        return result
+                        result["raw_version_text"] = ", ".join(version_parts)
+                        logger.info("Check Point %s: NVD cvss=%s severity=%s versions=%s",
+                                    cve_id, result["cvss_score"], result["severity"],
+                                    result["raw_version_text"][:100])
         except Exception:
             pass
 
-        # Fallback: try advisory portals
+        # If we got raw_version_text from NVD, we can return early
+        if result["raw_version_text"]:
+            return result
+
+        # Fallback: try advisory portals for version info
         for url in urls_to_try:
             try:
                 resp = requests.get(url, timeout=5)
@@ -817,14 +1075,15 @@ def fetch_checkpoint_advisory_detail(cve_id):
                         if fixed_match:
                             ver_parts.append(f"Fixed in {fixed_match.group(1)}")
                         if ver_parts:
-                            return ", ".join(ver_parts)
+                            result["raw_version_text"] = ", ".join(ver_parts)
+                            return result
             except Exception:
                 continue
 
-        return ""
+        return result
     except Exception as e:
         logger.debug("Check Point advisory fetch for %s failed: %s", cve_id, str(e))
-        return ""
+        return result
 
 
 # =============================================================================
@@ -1236,6 +1495,8 @@ def merge_discovered(all_discovered):
         "cisco_rss": 3,
         "cisa_kev": 2,
         "nvd_keywords": 1,
+        "nvd_source": 1,
+        "nvd_cpe": 1,
     }
 
     for cve in all_discovered:
@@ -1251,7 +1512,7 @@ def merge_discovered(all_discovered):
             if new_priority > existing_priority:
                 # Keep key fields from existing, update with new detail
                 for key in ["summary", "raw_version_text", "cvss_score", "severity", "sources"]:
-                    if cve.get(key) and (not existing.get(key) or existing.get(key) == "" or key == "sources"):
+                    if cve.get(key) and (not existing.get(key) or existing.get(key) in ("", "Unknown") or key == "sources"):
                         if key == "sources" and existing.get("sources"):
                             # Merge sources, avoiding duplicates
                             existing_urls = {s["url"] for s in existing["sources"]}
@@ -1269,9 +1530,9 @@ def merge_discovered(all_discovered):
                         if src["url"] not in existing_urls:
                             existing["sources"].append(src)
 
-                # Fill in missing fields
+                # Fill in missing or default fields
                 for key in ["summary", "raw_version_text", "cvss_score", "severity"]:
-                    if not existing.get(key) and cve.get(key):
+                    if (not existing.get(key) or existing.get(key) == "Unknown") and cve.get(key):
                         existing[key] = cve[key]
 
     return merged
@@ -1301,6 +1562,12 @@ def run_crawler():
 
     # NVD keyword search (fills gaps for Check Point and others)
     all_discovered.extend(discover_from_nvd_keywords())
+
+    # NVD source-based sweep — catches vendor CVEs with generic descriptions
+    all_discovered.extend(discover_from_nvd_by_source())
+
+    # NVD CPE-based search — catches CVEs with proper CPE assignments
+    all_discovered.extend(discover_from_nvd_by_cpe())
 
     logger.info("Total raw discoveries: %d", len(all_discovered))
 
@@ -1367,7 +1634,11 @@ def run_crawler():
                                         )
                                     cve_data["remediation"] = "\n".join(remediation_lines)
 
-            if cve_data["vendor"] == "cisco" and not cve_data.get("raw_version_text"):
+            if cve_data["vendor"] == "cisco" and (
+                not cve_data.get("raw_version_text")
+                or cve_data.get("cvss_score", 0.0) == 0.0
+                or cve_data.get("severity") == "Unknown"
+            ):
                 # Extract advisory URL from sources
                 advisory_url = ""
                 for src in cve_data.get("sources", []):
@@ -1375,21 +1646,52 @@ def run_crawler():
                         advisory_url = src["url"]
                         break
                 if advisory_url:
-                    detail = fetch_cisco_advisory_detail(advisory_url)
-                    if detail:
-                        cve_data["raw_version_text"] = detail
-                        logger.info("[%s] Cisco advisory version data: %s", cve_id, detail[:100])
+                    detail = fetch_cisco_advisory_detail(advisory_url, cve_id)
+                else:
+                    detail = fetch_cisco_advisory_detail("", cve_id)
+                if detail:
+                    if detail.get("raw_version_text") and not cve_data.get("raw_version_text"):
+                        cve_data["raw_version_text"] = detail["raw_version_text"]
+                        logger.info("[%s] Cisco advisory version data: %s", cve_id, detail["raw_version_text"][:100])
+                    if detail.get("cvss_score") and cve_data.get("cvss_score", 0.0) == 0.0:
+                        cve_data["cvss_score"] = detail["cvss_score"]
+                        logger.info("[%s] Cisco enriched cvss_score from NVD: %s", cve_id, detail["cvss_score"])
+                    if detail.get("severity") and cve_data.get("severity") == "Unknown":
+                        cve_data["severity"] = detail["severity"]
+                        logger.info("[%s] Cisco enriched severity from NVD: %s", cve_id, detail["severity"])
 
-            if cve_data["vendor"] == "checkpoint" and not cve_data.get("raw_version_text"):
+            if cve_data["vendor"] == "checkpoint" and (
+                not cve_data.get("raw_version_text")
+                or cve_data.get("cvss_score", 0.0) == 0.0
+                or cve_data.get("severity") == "Unknown"
+            ):
                 detail = fetch_checkpoint_advisory_detail(cve_id)
                 if detail:
-                    cve_data["raw_version_text"] = detail
-                    logger.info("[%s] Check Point advisory version data: %s", cve_id, detail[:100])
+                    if detail.get("raw_version_text") and not cve_data.get("raw_version_text"):
+                        cve_data["raw_version_text"] = detail["raw_version_text"]
+                        logger.info("[%s] Check Point advisory version data: %s", cve_id, detail["raw_version_text"][:100])
+                    if detail.get("cvss_score") and cve_data.get("cvss_score", 0.0) == 0.0:
+                        cve_data["cvss_score"] = detail["cvss_score"]
+                        logger.info("[%s] Check Point enriched cvss_score: %s", cve_id, detail["cvss_score"])
+                    if detail.get("severity") and cve_data.get("severity") == "Unknown":
+                        cve_data["severity"] = detail["severity"]
+                        logger.info("[%s] Check Point enriched severity: %s", cve_id, detail["severity"])
 
-            if cve_data["vendor"] == "paloalto" and not cve_data.get("raw_version_text"):
+            if cve_data["vendor"] == "paloalto" and (
+                not cve_data.get("raw_version_text")
+                or cve_data.get("cvss_score", 0.0) == 0.0
+                or cve_data.get("severity") == "Unknown"
+            ):
                 detail = fetch_paloalto_advisory_detail(cve_id)
                 if detail:
-                    cve_data["raw_version_text"] = detail
+                    if detail.get("raw_version_text") and not cve_data.get("raw_version_text"):
+                        cve_data["raw_version_text"] = detail["raw_version_text"]
+                    if detail.get("cvss_score") and cve_data.get("cvss_score", 0.0) == 0.0:
+                        cve_data["cvss_score"] = detail["cvss_score"]
+                        logger.info("[%s] Palo Alto enriched cvss_score from NVD: %s", cve_id, detail["cvss_score"])
+                    if detail.get("severity") and cve_data.get("severity") == "Unknown":
+                        cve_data["severity"] = detail["severity"]
+                        logger.info("[%s] Palo Alto enriched severity from NVD: %s", cve_id, detail["severity"])
 
             # Parse conditions
             conditions = parse_conditions(cve_data.get("summary", ""))
