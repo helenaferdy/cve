@@ -81,6 +81,22 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # Create cve_ai_enrichment table for AI-generated enrichment data
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cve_ai_enrichment (
+        cve_id TEXT PRIMARY KEY,
+        ai_summary TEXT,
+        ai_severity TEXT,
+        ai_cvss_score REAL,
+        ai_impacted_versions TEXT,
+        ai_conditions TEXT,
+        ai_remediation TEXT,
+        model_used TEXT NOT NULL,
+        generated_at TEXT NOT NULL,
+        FOREIGN KEY (cve_id) REFERENCES firewall_cves(cve_id)
+    );
+    """)
+
     conn.commit()
     conn.close()
     logger.info("Database initialized successfully.")
@@ -296,6 +312,77 @@ def get_validation_log(cve_id):
             pass
         return res
     return None
+
+def save_ai_enrichment(cve_id, enrichment_data):
+    """Saves or updates an AI enrichment record for a CVE."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    ai_impacted_json = json.dumps(enrichment_data.get("ai_impacted_versions"))
+    ai_conditions_json = json.dumps(enrichment_data.get("ai_conditions"))
+
+    cursor.execute("""
+        INSERT INTO cve_ai_enrichment (
+            cve_id, ai_summary, ai_severity, ai_cvss_score,
+            ai_impacted_versions, ai_conditions, ai_remediation,
+            model_used, generated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(cve_id) DO UPDATE SET
+            ai_summary=excluded.ai_summary,
+            ai_severity=excluded.ai_severity,
+            ai_cvss_score=excluded.ai_cvss_score,
+            ai_impacted_versions=excluded.ai_impacted_versions,
+            ai_conditions=excluded.ai_conditions,
+            ai_remediation=excluded.ai_remediation,
+            model_used=excluded.model_used,
+            generated_at=excluded.generated_at;
+    """, (
+        cve_id,
+        enrichment_data.get("ai_summary"),
+        enrichment_data.get("ai_severity"),
+        enrichment_data.get("ai_cvss_score"),
+        ai_impacted_json,
+        ai_conditions_json,
+        enrichment_data.get("ai_remediation"),
+        enrichment_data.get("model_used", "deepseek-v4-flash"),
+        now,
+    ))
+    conn.commit()
+    conn.close()
+
+def get_ai_enrichment(cve_id):
+    """Retrieves the AI enrichment record for a given CVE ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM cve_ai_enrichment WHERE cve_id = ?;", (cve_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        res = dict(row)
+        try:
+            res["ai_impacted_versions"] = json.loads(res["ai_impacted_versions"])
+        except Exception:
+            res["ai_impacted_versions"] = None
+        try:
+            res["ai_conditions"] = json.loads(res["ai_conditions"])
+        except Exception:
+            res["ai_conditions"] = []
+        return res
+    return None
+
+def get_unenriched_cve_ids():
+    """Returns list of CVE IDs present in firewall_cves but missing from cve_ai_enrichment."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT f.cve_id FROM firewall_cves f
+        LEFT JOIN cve_ai_enrichment e ON f.cve_id = e.cve_id
+        WHERE e.cve_id IS NULL;
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [row["cve_id"] for row in rows]
 
 if __name__ == "__main__":
     init_db()

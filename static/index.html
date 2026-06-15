@@ -458,7 +458,67 @@
 
                 <!-- Right Column (40% Width -> col-span-2) -->
                 <div class="lg:col-span-2 space-y-4">
-                    
+
+                    <!-- AI Summary Card -->
+                    <div class="bg-[#0A0A0D] border border-[#26262F] rounded-2xl p-5 flex flex-col space-y-4">
+                        <div class="flex items-center justify-between select-none">
+                            <span class="text-[10px] font-extrabold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
+                                AI Summary
+                            </span>
+                            <span class="text-[7px] font-bold text-zinc-600 uppercase">DeepSeek V4 Flash</span>
+                        </div>
+
+                        <!-- Generating / loading state -->
+                        <template x-if="aiSummaryGenerating">
+                            <div class="space-y-2.5 animate-pulse">
+                                <div class="h-2.5 bg-[#1A1A22] rounded w-full"></div>
+                                <div class="h-2.5 bg-[#1A1A22] rounded w-3/4"></div>
+                                <div class="h-2.5 bg-[#1A1A22] rounded w-5/6"></div>
+                            </div>
+                        </template>
+
+                        <!-- Generated summary -->
+                        <template x-if="!aiSummaryGenerating && selectedCVEAISummary?.ai_summary">
+                            <div class="space-y-3">
+                                <p class="text-[11px] text-zinc-300 leading-relaxed" x-text="selectedCVEAISummary.ai_summary"></p>
+
+                                <!-- Gap fills -->
+                                <div x-show="selectedCVEAISummary.ai_severity || selectedCVEAISummary.ai_cvss_score || selectedCVEAISummary.ai_impacted_versions || selectedCVEAISummary.ai_conditions || selectedCVEAISummary.ai_remediation" class="space-y-2 pt-2 border-t border-[#26262F]">
+                                    <span class="text-[8px] uppercase font-bold tracking-wider text-[#9CA3AF]">AI-Enriched Gaps</span>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <span x-show="selectedCVEAISummary.ai_severity" class="text-[9px] font-semibold bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20" x-text="'Severity: ' + selectedCVEAISummary.ai_severity"></span>
+                                        <span x-show="selectedCVEAISummary.ai_cvss_score" class="text-[9px] font-semibold bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20" x-text="'CVSS: ' + selectedCVEAISummary.ai_cvss_score"></span>
+                                        <span x-show="selectedCVEAISummary.ai_impacted_versions && (selectedCVEAISummary.ai_impacted_versions.min || selectedCVEAISummary.ai_impacted_versions.max)" class="text-[9px] font-semibold bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20">
+                                            <span x-text="'Versions: ' + (selectedCVEAISummary.ai_impacted_versions.min || '?') + (selectedCVEAISummary.ai_impacted_versions.max ? ' to ' + selectedCVEAISummary.ai_impacted_versions.max : '') + (selectedCVEAISummary.ai_impacted_versions.fixed ? ' (fixed: ' + selectedCVEAISummary.ai_impacted_versions.fixed + ')' : '')"></span>
+                                        </span>
+                                        <span x-show="selectedCVEAISummary.ai_remediation" class="text-[9px] font-semibold bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20 w-full" x-text="'Fix: ' + selectedCVEAISummary.ai_remediation"></span>
+                                        <template x-for="cond in selectedCVEAISummary.ai_conditions" :key="cond">
+                                            <span class="text-[9px] font-semibold bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20" x-text="conditionMap[cond] || cond"></span>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div class="text-[7px] text-zinc-650" x-text="'Generated ' + (selectedCVEAISummary.generated_at || '')"></div>
+                            </div>
+                        </template>
+
+                        <!-- Not generated yet -->
+                        <template x-if="!aiSummaryGenerating && !selectedCVEAISummary?.ai_summary && !aiSummaryLoading">
+                            <div class="flex flex-col items-center gap-3 py-2">
+                                <p class="text-[10px] text-[#9CA3AF] text-center">Ask the AI to analyze this CVE and fill knowledge gaps</p>
+                                <button @click="generateAISummary()" class="text-[10px] font-bold text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 hover:border-violet-500/50 px-4 py-2 rounded-xl transition">Generate AI Summary</button>
+                            </div>
+                        </template>
+
+                        <!-- Error state -->
+                        <template x-if="aiSummaryError">
+                            <div class="flex flex-col items-center gap-2 py-2">
+                                <p class="text-[10px] text-rose-400 text-center" x-text="aiSummaryError"></p>
+                                <button @click="generateAISummary()" class="text-[9px] font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3 py-1.5 rounded-lg border border-rose-500/30 transition">Retry</button>
+                            </div>
+                        </template>
+                    </div>
+
                     <!-- Stepper / Unified Validation Terminal -->
                     <div class="bg-[#0A0A0D] border border-[#26262F] rounded-2xl p-5 flex flex-col space-y-5">
                         
@@ -551,23 +611,7 @@
                             </div>
 
                         </div>
-                        
-                        <!-- Monospace debug tracer terminal -->
-                        <div class="bg-[#121216] border border-[#26262F] rounded-xl p-3.5 font-mono text-[9px] text-[#9CA3AF] space-y-2.5 select-text shadow-inner">
-                            <div class="text-[8px] font-bold text-zinc-550 uppercase border-b border-[#26262F] pb-1 flex items-center gap-1.5 select-none">
-                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                Execution Debug Tracer Console
-                            </div>
-                            <div class="space-y-1">
-                                <div>[STG-1] Sync Source: <strong class="text-zinc-300" x-text="selectedCVEValidation?.details?.pass_1?.source || 'none'"></strong></div>
-                                <div>[STG-1] Logs: <span class="text-zinc-300 font-medium" x-text="selectedCVEValidation?.details?.pass_1?.notes || ''"></span></div>
-                                <div>[STG-2] Schema Integrity: <span class="text-emerald-400 font-semibold">SUCCESS (Metadata compliance)</span></div>
-                                <div>[STG-3] Range logic: <strong class="text-zinc-300" x-text="selectedCVEValidation?.details?.pass_3?.range || 'Valid'"></strong></div>
-                                <div>[STG-4] Audit Warnings: <span class="text-[#9CA3AF]" x-text="selectedCVEValidation?.details?.pass_4?.conditions || selectedCVEValidation?.details?.pass_4?.audit_warning || 'none'"></span></div>
-                                <div>[STG-5] Version Data: <strong class="text-zinc-300" x-text="(selectedCVE?.impacted_versions?.min || selectedCVE?.impacted_versions?.max) ? ('min=' + (selectedCVE?.impacted_versions?.min || '?') + ' max=' + (selectedCVE?.impacted_versions?.max || '?')) : 'no version data'"></strong></div>
 
-                            </div>
-                        </div>
                     </div>
 
                 </div>

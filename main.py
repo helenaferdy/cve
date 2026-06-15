@@ -1,8 +1,10 @@
 import os
+import json
 import re
 import time
 import datetime
 import logging
+import requests  # noqa: F811
 from typing import List, Optional
 from fastapi import FastAPI, Request, Query, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -14,6 +16,26 @@ import crawler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
+
+OP_ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
+MODEL_ID = "deepseek-v4-flash"
+
+
+def _load_api_key():
+    cfgs = ["/opt/cve/config.conf", os.path.join(os.path.dirname(__file__), "config.conf")]
+    for p in cfgs:
+        if os.path.exists(p):
+            with open(p) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("OPENCODE_API_KEY="):
+                        return line.split("=", 1)[1].strip()
+    return os.getenv("OPENCODE_API_KEY", "")
+
+
+OP_KEY = _load_api_key()
+if not OP_KEY:
+    logger.warning("OPENCODE_API_KEY not found in config.conf or env — AI enrichment disabled")
 
 app = FastAPI(
     title="CVE Monitor & Filtering Engine",
@@ -309,6 +331,277 @@ def run_sync_task():
 async def trigger_sync(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_sync_task)
     return {"message": "Database synchronization triggered in the background."}
+
+CONDITION_LABELS = {
+    "pre_auth_exploit": "Pre-Authentication Exploit",
+    "post_auth_required": "Post-Authentication Required",
+    "mgmt_interface_exposed": "Management exposed",
+    "api_enabled": "API / Automation Enabled",
+    "telemetry_active": "Telemetry & Analytics Active",
+    "ssl_vpn_enabled": "SSL VPN Enabled",
+    "captive_portal_active": "Captive Portal Active",
+    "ike_v2_processing": "IKEv2 VPN Active",
+    "saml_sso_configured": "SAML SSO Configured",
+    "ssl_decryption_active": "SSL/TLS Decryption Active",
+    "ips_enabled": "IPS / Threat Prevention Enabled",
+    "file_inspection_active": "File Inspection / Sandboxing",
+    "dynamic_routing_active": "Dynamic Routing Active (BGP/OSPF)",
+    "ha_clustering_enabled": "HA Clustering Enabled",
+}
+
+
+def generate_ai_enrichment(cve_record: dict) -> dict:
+    if not OP_KEY:
+        raise HTTPException(status_code=503, detail="OPENCODE_API_KEY not configured")
+
+    cve_id = cve_record["cve_id"]
+    vendor = cve_record.get("vendor", "")
+    product = cve_record.get("product", "")
+    severity = cve_record.get("severity", "Unknown")
+    cvss_score = cve_record.get("cvss_score", 0.0)
+    summary = cve_record.get("summary", "")
+    impacted = cve_record.get("impacted_versions", {})
+    if isinstance(impacted, str):
+        try:
+            impacted = json.loads(impacted)
+        except Exception:
+            impacted = {}
+    conditions = cve_record.get("conditions", [])
+    if isinstance(conditions, str):
+        try:
+            conditions = json.loads(conditions)
+        except Exception:
+            conditions = []
+    remediation = cve_record.get("remediation", "")
+    epss = cve_record.get("epss_score", 0.0)
+    internet_active = cve_record.get("internet_scanning_active", 0)
+    poc_exists = cve_record.get("public_poc_exists", 0)
+    malware = cve_record.get("malware_families", [])
+    if isinstance(malware, str):
+        try:
+            malware = json.loads(malware)
+        except Exception:
+            malware = []
+
+    needs_severity = severity in ("Unknown", "", None)
+    needs_cvss = cvss_score == 0.0
+    needs_versions = not impacted.get("min") and not impacted.get("max") and not impacted.get("fixed")
+    needs_conditions = not conditions
+    needs_remediation = not remediation
+
+    condition_labels = [CONDITION_LABELS.get(c, c) for c in conditions]
+    malware_labels = ", ".join(malware) if malware else "none"
+    epss_pct = f"{epss * 100:.1f}%" if epss else "unavailable"
+    threat_context = []
+    if internet_active:
+        threat_context.append("Internet-wide scanning detected")
+    if poc_exists:
+        threat_context.append("Public PoC exists")
+    threat_str = "; ".join(threat_context) if threat_context else "No known active exploitation"
+
+    user_prompt = f"""CVE ID: {cve_id}
+Vendor: {vendor}
+Product: {product}
+Severity: {severity}
+CVSS Score: {cvss_score}
+Summary: {summary}
+Impacted Versions (min/max/fixed): {json.dumps(impacted)}
+Conditions: {json.dumps(condition_labels) if condition_labels else 'none'}
+Remediation: {remediation if remediation else 'none'}
+EPSS Score: {epss_pct}
+Threat Context: {threat_str}
+Associated Threat Groups: {malware_labels}"""
+
+    missing_hints = []
+    if needs_severity:
+        missing_hints.append("- ai_severity: estimate Critical/High/Medium/Low from the summary text")
+    if needs_cvss:
+        missing_hints.append("- ai_cvss_score: estimate a float 0.0-10.0 from the vulnerability description")
+    if needs_versions:
+        missing_hints.append("- ai_impacted_versions: extract version range as {{\"min\":...,\"max\":...,\"fixed\":...}} from the summary if any versions are mentioned")
+    if needs_conditions:
+        missing_hints.append("- ai_conditions: pick applicable condition keys from this list: [{conds}]".format(conds=", ".join(CONDITION_LABELS.keys())))
+    if needs_remediation:
+        missing_hints.append("- ai_remediation: suggest patching or mitigation steps based on the vulnerability type")
+
+    missing_block = ""
+    if missing_hints:
+        missing_block = "\nAdditionally, some fields are missing from this CVE record. Fill ONLY the fields that are missing:\n" + "\n".join(missing_hints)
+
+    system_prompt = f"""You are a cybersecurity CVE analyst engine. Your output must be a single valid JSON object with these fields:
+
+- "ai_summary": A brief 2-3 sentence contextual insight. Do NOT restate the CVSS score, severity label, vendor/product name, affected version numbers, or prerequisite conditions. Instead, explain what this vulnerability actually enables an attacker to do, the real-world impact scenario, or why it's practically significant. Be technical but concise. If the CVE has threat groups associated, mention them and their known attack patterns. If EPSS is high or exploitation is active, emphasize the urgency.
+
+- "ai_severity": STRING or null. Only provide if the original severity is Unknown.
+- "ai_cvss_score": NUMBER or null. Only provide if the original CVSS is 0.0.
+- "ai_impacted_versions": OBJECT with keys "min", "max", "fixed" or null. Only provide if original is empty.
+- "ai_conditions": ARRAY of strings from the condition key list or null. Only provide if original is empty.
+- "ai_remediation": STRING or null. Only provide if original remediation is empty.
+
+IMPORTANT: For fields where the original data IS already present, set the value to null — do NOT overwrite good data.
+{missing_block}
+
+Return ONLY the JSON object, no other text."""
+
+    payload = {
+        "model": MODEL_ID,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4096,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {OP_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        resp = requests.post(OP_ENDPOINT, json=payload, headers=headers, timeout=45)
+        if resp.status_code == 429:
+            logger.warning("[%s] OpenCode API rate limited, retrying after 5s...", cve_id)
+            time.sleep(5)
+            resp = requests.post(OP_ENDPOINT, json=payload, headers=headers, timeout=45)
+
+        if resp.status_code != 200:
+            logger.error("[%s] OpenCode API returned %d: %s", cve_id, resp.status_code, resp.text[:500])
+            raise HTTPException(status_code=502, detail=f"OpenCode API error: {resp.status_code}")
+
+        raw = resp.json()
+        msg = raw.get("choices", [{}])[0].get("message", {})
+        content = msg.get("content", "") or msg.get("reasoning_content", "")
+
+        if not content:
+            logger.error("[%s] OpenCode returned empty content. Full response: %s",
+                         cve_id, json.dumps(raw, indent=2)[:1000])
+            raise HTTPException(status_code=502, detail="AI returned empty response")
+
+        if msg.get("reasoning_content") and not msg.get("content"):
+            content = content.strip()
+            json_match = re.search(r"\{[\s\S]*\}", content)
+            if json_match:
+                content = json_match.group(0)
+
+        content = content.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```\w*\n?", "", content)
+            content = re.sub(r"\n?```$", "", content)
+
+        result = None
+        for strategy in "json_loads", "largest_json", "first_json":
+            try:
+                if strategy == "json_loads":
+                    result = json.loads(content)
+                elif strategy == "largest_json":
+                    matches = list(re.finditer(r"\{[\s\S]*?\}", content))
+                    if matches:
+                        longest = max(matches, key=lambda m: len(m.group(0)))
+                        result = json.loads(longest.group(0))
+                elif strategy == "first_json":
+                    m = re.search(r"\{[\s\S]*?\}", content)
+                    if m:
+                        result = json.loads(m.group(0))
+                if result and isinstance(result, dict) and "ai_summary" in result:
+                    break
+                result = None
+            except Exception:
+                pass
+
+        if not result:
+            raise json.JSONDecodeError("Could not extract valid JSON from AI response", content, 0)
+
+        result["model_used"] = MODEL_ID
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.error("[%s] Failed to parse AI response as JSON: %s", cve_id, str(e)[:200])
+        raise HTTPException(status_code=502, detail="AI response was not valid JSON")
+    except requests.RequestException as e:
+        logger.error("[%s] OpenCode API request failed: %s", cve_id, str(e))
+        raise HTTPException(status_code=502, detail=f"OpenCode API unreachable: {str(e)}")
+
+
+@app.get("/api/cves/{cve_id}/enrichment")
+async def get_cve_enrichment(cve_id: str):
+    try:
+        enrichment = database.get_ai_enrichment(cve_id)
+        if enrichment:
+            return enrichment
+        return {"cve_id": cve_id, "enriched": False}
+    except Exception as e:
+        logger.error("Failed to fetch enrichment for %s: %s", cve_id, str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch enrichment data")
+
+
+@app.post("/api/cves/{cve_id}/enrich")
+async def enrich_single_cve(cve_id: str):
+    try:
+        all_cves = database.query_cves()
+        cve_record = next((c for c in all_cves if c["cve_id"] == cve_id), None)
+        if not cve_record:
+            raise HTTPException(status_code=404, detail=f"CVE {cve_id} not found")
+
+        existing = database.get_ai_enrichment(cve_id)
+        if existing and existing.get("ai_summary"):
+            return {"cve_id": cve_id, "message": "Already enriched", "enrichment": existing}
+
+        enrichment = generate_ai_enrichment(cve_record)
+        database.save_ai_enrichment(cve_id, enrichment)
+        logger.info("[%s] AI enrichment generated and saved", cve_id)
+        return {"cve_id": cve_id, "enrichment": enrichment, "generated": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("[%s] Enrichment failed: %s", cve_id, str(e))
+        raise HTTPException(status_code=500, detail=f"Enrichment failed: {str(e)}")
+
+
+@app.post("/api/enrich/batch")
+async def enrich_batch(background_tasks: BackgroundTasks):
+    if not OP_KEY:
+        raise HTTPException(status_code=503, detail="OPENCODE_API_KEY not configured")
+
+    def _run_batch():
+        unenriched = database.get_unenriched_cve_ids()
+        total = len(unenriched)
+        logger.info("Batch enrichment starting for %d CVEs", total)
+        created = 0
+        failed = 0
+
+        all_cves = database.query_cves()
+        cve_map = {c["cve_id"]: c for c in all_cves}
+
+        batch_size = 5
+        for batch_start in range(0, total, batch_size):
+            batch = unenriched[batch_start:batch_start + batch_size]
+            for cve_id in batch:
+                try:
+                    cve_record = cve_map.get(cve_id)
+                    if not cve_record:
+                        logger.warning("[%s] Skipped — not found in DB", cve_id)
+                        continue
+                    enrichment = generate_ai_enrichment(cve_record)
+                    database.save_ai_enrichment(cve_id, enrichment)
+                    created += 1
+                    logger.info("[%s] Enriched (%d/%d)", cve_id, created + failed, total)
+                except Exception as e:
+                    failed += 1
+                    logger.error("[%s] Enrichment failed: %s", cve_id, str(e))
+
+            if batch_start + len(batch) < total:
+                time.sleep(1.5)
+
+        logger.info("Batch enrichment done: %d enriched, %d failed out of %d", created, failed, total)
+
+    background_tasks.add_task(_run_batch)
+    unenriched = database.get_unenriched_cve_ids()
+    return {
+        "message": f"Batch enrichment started for {len(unenriched)} un-enriched CVEs in background",
+        "pending_count": len(unenriched),
+    }
 
 # --- STATIC FILES ROUTING ---
 os.makedirs("/opt/cve/static", exist_ok=True)

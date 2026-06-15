@@ -70,6 +70,10 @@ document.addEventListener('alpine:init', () => {
         searchQuery: '',
         selectedCVE: null,
         selectedCVEValidation: null,
+        selectedCVEAISummary: null,
+        aiSummaryLoading: false,
+        aiSummaryGenerating: false,
+        aiSummaryError: null,
         isLoading: true,
         isSyncing: false,
         cveCountsByVendor: {},
@@ -97,6 +101,8 @@ document.addEventListener('alpine:init', () => {
             this.$watch('selectedCVE', async (cve) => {
                 if (cve) {
                     this.selectedCVEValidation = null;
+                    this.selectedCVEAISummary = null;
+                    this.aiSummaryError = null;
                     try {
                         const response = await fetch(`/api/cves/${cve.cve_id}/validation`);
                         if (response.ok) {
@@ -105,8 +111,11 @@ document.addEventListener('alpine:init', () => {
                     } catch (err) {
                         console.error("Failed to fetch validation log:", err);
                     }
+                    this.fetchAISummary();
                 } else {
                     this.selectedCVEValidation = null;
+                    this.selectedCVEAISummary = null;
+                    this.aiSummaryError = null;
                 }
             });
 
@@ -306,6 +315,46 @@ document.addEventListener('alpine:init', () => {
                 console.error("Failed to fetch filtered CVE list:", err);
             } finally {
                 this.isLoading = false;
+            }
+        },
+
+        async fetchAISummary() {
+            if (!this.selectedCVE) return;
+            this.aiSummaryLoading = true;
+            this.aiSummaryError = null;
+            try {
+                const response = await fetch(`/api/cves/${this.selectedCVE.cve_id}/enrichment`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.ai_summary) {
+                        this.selectedCVEAISummary = data;
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch AI summary:", err);
+            } finally {
+                this.aiSummaryLoading = false;
+            }
+        },
+
+        async generateAISummary() {
+            if (!this.selectedCVE) return;
+            this.aiSummaryGenerating = true;
+            this.aiSummaryError = null;
+            try {
+                const response = await fetch(`/api/cves/${this.selectedCVE.cve_id}/enrich`, { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.selectedCVEAISummary = data.enrichment;
+                } else {
+                    const errData = await response.json();
+                    this.aiSummaryError = errData.detail || 'Failed to generate summary';
+                }
+            } catch (err) {
+                this.aiSummaryError = 'Network error — try again';
+                console.error("Failed to generate AI summary:", err);
+            } finally {
+                this.aiSummaryGenerating = false;
             }
         },
 
