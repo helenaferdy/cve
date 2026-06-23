@@ -384,5 +384,72 @@ def get_unenriched_cve_ids():
     conn.close()
     return [row["cve_id"] for row in rows]
 
+def backfill_cve_from_ai_enrichment(cve_id):
+    """Backfills missing CVE fields from AI enrichment data. Only fills genuinely blank/missing values."""
+    enrichment = get_ai_enrichment(cve_id)
+    if not enrichment:
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM firewall_cves WHERE cve_id = ?", (cve_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    cve = dict(row)
+
+    updated = False
+
+    orig_sev = cve.get("severity", "")
+    ai_sev = enrichment.get("ai_severity")
+    if orig_sev in ("Unknown", "", None) and ai_sev:
+        cursor.execute("UPDATE firewall_cves SET severity = ? WHERE cve_id = ?", (ai_sev, cve_id))
+        updated = True
+
+    orig_cvss = cve.get("cvss_score", -1)
+    ai_cvss = enrichment.get("ai_cvss_score")
+    if (orig_cvss == 0.0 or orig_cvss is None) and ai_cvss:
+        cursor.execute("UPDATE firewall_cves SET cvss_score = ? WHERE cve_id = ?", (ai_cvss, cve_id))
+        updated = True
+
+    try:
+        orig_ver = json.loads(cve.get("impacted_versions", "{}"))
+    except Exception:
+        orig_ver = {}
+    ai_ver = enrichment.get("ai_impacted_versions")
+    if isinstance(ai_ver, str):
+        try:
+            ai_ver = json.loads(ai_ver)
+        except Exception:
+            ai_ver = None
+    if (not orig_ver.get("min") and not orig_ver.get("max") and not orig_ver.get("fixed")) and ai_ver and (ai_ver.get("min") or ai_ver.get("max") or ai_ver.get("fixed")):
+        cursor.execute("UPDATE firewall_cves SET impacted_versions = ? WHERE cve_id = ?", (json.dumps(ai_ver), cve_id))
+        updated = True
+
+    try:
+        orig_cond = json.loads(cve.get("conditions", "[]"))
+    except Exception:
+        orig_cond = []
+    ai_cond = enrichment.get("ai_conditions")
+    if isinstance(ai_cond, str):
+        try:
+            ai_cond = json.loads(ai_cond)
+        except Exception:
+            ai_cond = []
+    if (not orig_cond) and ai_cond:
+        cursor.execute("UPDATE firewall_cves SET conditions = ? WHERE cve_id = ?", (json.dumps(ai_cond), cve_id))
+        updated = True
+
+    orig_rem = cve.get("remediation", "")
+    ai_rem = enrichment.get("ai_remediation")
+    if (not orig_rem or orig_rem == "No official patch available yet.") and ai_rem:
+        cursor.execute("UPDATE firewall_cves SET remediation = ? WHERE cve_id = ?", (ai_rem, cve_id))
+        updated = True
+
+    conn.commit()
+    conn.close()
+    return updated
+
 if __name__ == "__main__":
     init_db()

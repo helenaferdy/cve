@@ -75,6 +75,7 @@ document.addEventListener('alpine:init', () => {
         aiSummaryGenerating: false,
         aiSummaryError: null,
         isLoading: true,
+        mobileFilterOpen: false,
         isSyncing: false,
         cveCountsByVendor: {},
         productCounts: {},

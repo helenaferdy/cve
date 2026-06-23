@@ -549,7 +549,8 @@ async def enrich_single_cve(cve_id: str):
 
         enrichment = generate_ai_enrichment(cve_record)
         database.save_ai_enrichment(cve_id, enrichment)
-        logger.info("[%s] AI enrichment generated and saved", cve_id)
+        database.backfill_cve_from_ai_enrichment(cve_id)
+        logger.info("[%s] AI enrichment generated and backfilled", cve_id)
         return {"cve_id": cve_id, "enrichment": enrichment, "generated": True}
 
     except HTTPException:
@@ -585,6 +586,7 @@ async def enrich_batch(background_tasks: BackgroundTasks):
                         continue
                     enrichment = generate_ai_enrichment(cve_record)
                     database.save_ai_enrichment(cve_id, enrichment)
+                    database.backfill_cve_from_ai_enrichment(cve_id)
                     created += 1
                     logger.info("[%s] Enriched (%d/%d)", cve_id, created + failed, total)
                 except Exception as e:
@@ -602,6 +604,22 @@ async def enrich_batch(background_tasks: BackgroundTasks):
         "message": f"Batch enrichment started for {len(unenriched)} un-enriched CVEs in background",
         "pending_count": len(unenriched),
     }
+
+@app.post("/api/enrich/backfill")
+async def backfill_all():
+    if not OP_KEY:
+        raise HTTPException(status_code=503, detail="OPENCODE_API_KEY not configured")
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT cve_id FROM cve_ai_enrichment WHERE ai_summary IS NOT NULL")
+    rows = cursor.fetchall()
+    conn.close()
+    total = len(rows)
+    backfilled = 0
+    for row in rows:
+        if database.backfill_cve_from_ai_enrichment(row["cve_id"]):
+            backfilled += 1
+    return {"message": f"Backfill complete: {backfilled} CVEs updated out of {total} enriched"}
 
 # --- STATIC FILES ROUTING ---
 os.makedirs("/opt/cve/static", exist_ok=True)

@@ -6,7 +6,7 @@ import time
 import xml.etree.ElementTree as ET
 import requests
 from urllib.parse import quote as url_quote
-from database import init_db, save_cve, log_system_sync, get_db_connection, save_validation_log, get_ai_enrichment, save_ai_enrichment
+from database import init_db, save_cve, log_system_sync, get_db_connection, save_validation_log, get_ai_enrichment, save_ai_enrichment, backfill_cve_from_ai_enrichment
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -1761,6 +1761,7 @@ def run_crawler():
                         from main import generate_ai_enrichment
                         enrichment = generate_ai_enrichment(cve_record)
                         save_ai_enrichment(cve_id, enrichment)
+                        backfill_cve_from_ai_enrichment(cve_id)
                         logger.info("[%s] AI enrichment completed", cve_id)
                     except Exception as e:
                         logger.warning("[%s] AI enrichment skipped: %s", cve_id, str(e))
