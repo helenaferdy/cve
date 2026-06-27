@@ -62,12 +62,12 @@
         </div>
 
         <!-- Ingestion Pipeline status badge -->
-        <div class="flex items-center space-x-2 text-xs text-[#9CA3AF] font-mono bg-[#0E0E11] px-3 py-1.5 rounded-lg border border-[#26262F]">
+        <div class="flex items-center space-x-2 text-[10px] sm:text-xs text-[#9CA3AF] font-mono bg-[#0E0E11] px-3 py-1.5 rounded-lg border border-[#26262F]">
             <span class="relative flex h-2 w-2">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span class="text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF]">Data Ingestion Pipeline:</span>
+            <span class="text-[8px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF]">Data Ingestion Pipeline:</span>
             <span class="text-zinc-300" x-text="relativeSyncText">Loading...</span>
         </div>
     </header>
@@ -85,10 +85,10 @@
                     <svg class="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
                     </svg>
-                    <span class="text-xs font-bold uppercase tracking-wider text-amber-500">Filters</span>
+                    <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-500">Filters</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="text-[10px] text-zinc-500 font-mono" x-text="filteredCVEs.length + ' results'"></span>
+                    <span class="text-[9px] sm:text-[10px] text-zinc-500 font-mono" x-text="filteredCVEs.length + ' results'"></span>
                     <svg class="h-4 w-4 text-zinc-500 transition-transform duration-200" :class="mobileFilterOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
@@ -101,7 +101,7 @@
             <!-- Vendor Scopes Section with nested product hierarchy -->
             <div>
                 <div class="flex items-center justify-between mb-4 select-none">
-                    <h2 class="text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">Vendor Scopes</h2>
+                    <h2 class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">Vendor Scopes</h2>
                     <div class="flex items-center gap-1">
                         <button @click="selectAllProducts()" aria-label="Select all products" class="p-1.5 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition" title="Select All">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,8 +127,8 @@
                                            :indeterminate="isVendorIndeterminate(vendorItem)"
                                            @change="toggleVendorProducts(vendorItem)"
                                            class="rounded border-[#26262F] bg-[#0E0E11] text-amber-500 focus:ring-0 focus:ring-offset-0 focus:outline-none h-4 w-4 cursor-pointer shrink-0">
-                                    <span class="text-xs font-bold text-white cursor-pointer truncate" x-text="vendorItem.name"></span>
-                                    <span class="text-[9px] text-[#9CA3AF] font-mono ml-1" x-text="'(' + (cveCountsByVendor[vendorItem.id] || 0) + ')'"></span>
+                                    <span class="text-[10px] sm:text-xs font-bold text-white cursor-pointer truncate" x-text="vendorItem.name"></span>
+                                    <span class="text-[8px] sm:text-[9px] text-[#9CA3AF] font-mono ml-1" x-text="'(' + (cveCountsByVendor[vendorItem.id] || 0) + ')'"></span>
                                 </div>
                                 <div @click="vOpenFortinet = (vendorItem.id === 'fortinet') ? !vOpenFortinet : vOpenFortinet; vOpenCheckpoint = (vendorItem.id === 'checkpoint') ? !vOpenCheckpoint : vOpenCheckpoint; vOpenPaloalto = (vendorItem.id === 'paloalto') ? !vOpenPaloalto : vOpenPaloalto; vOpenCisco = (vendorItem.id === 'cisco') ? !vOpenCisco : vOpenCisco" 
                                      class="cursor-pointer text-[#9CA3AF] hover:text-white transition shrink-0">
@@ -151,7 +151,7 @@
                                                                :checked="isProductSelected(prod.key)" 
                                                                @change="toggleProduct(prod.key)"
                                                                class="rounded border-[#26262F] bg-[#0E0E11] text-amber-500/70 focus:ring-0 focus:ring-offset-0 focus:outline-none h-3.5 w-3.5 cursor-pointer shrink-0">
-                                                        <span class="text-[10px] font-bold text-[#9CA3AF] truncate" x-text="prod.name + ' (' + (productCounts[prod.key] || 0) + ')'"></span>
+                                                        <span class="text-[9px] sm:text-[10px] font-bold text-[#9CA3AF] truncate" x-text="prod.name + ' (' + (productCounts[prod.key] || 0) + ')'"></span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -174,7 +174,7 @@
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="flex flex-col sm:flex-row gap-3 w-full md:max-w-xl">
                     <div class="relative flex-1">
-                        <input type="text" x-model="searchQuery" placeholder="Search by CVE-ID, summary keywords, or workarounds..." class="w-full bg-[#17171C] border border-[#26262F] focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 rounded-xl py-3 pl-11 pr-4 text-sm text-zinc-100 placeholder-zinc-500 transition">
+                        <input type="text" x-model="searchQuery" placeholder="Search by CVE-ID, summary keywords, or workarounds..." class="w-full bg-[#17171C] border border-[#26262F] focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 rounded-xl py-3 pl-11 pr-4 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 transition">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-550">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -191,7 +191,7 @@
                     
                     <!-- Sorting Selector -->
                     <div class="relative shrink-0 select-none">
-                        <select x-model="sortBy" class="w-full sm:w-auto bg-[#17171C] border border-[#26262F] focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 rounded-xl py-3 pl-4 pr-10 text-sm text-zinc-100 appearance-none cursor-pointer transition">
+                        <select x-model="sortBy" class="w-full sm:w-auto bg-[#17171C] border border-[#26262F] focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 rounded-xl py-3 pl-4 pr-10 text-xs sm:text-sm text-zinc-100 appearance-none cursor-pointer transition">
                             <option value="latest">Latest Published</option>
                             <option value="cvss">Highest CVSS</option>
                             <option value="epss">Highest EPSS Threat</option>
@@ -204,7 +204,7 @@
                     </div>
                 </div>
 
-                <div class="text-xs text-[#9CA3AF] flex items-center select-none">
+                <div class="text-[10px] sm:text-xs text-[#9CA3AF] flex items-center select-none">
                     <span class="bg-[#17171C] text-zinc-100 font-semibold px-3 py-1.5 rounded-lg border border-[#26262F] shadow-sm">
                         Showing <span class="text-amber-500 font-mono" x-text="filteredCVEs.length">0</span> of <span class="font-mono" x-text="allCVEs.length">0</span> Advisories
                     </span>
@@ -217,7 +217,7 @@
                     <svg class="animate-spin h-10 w-10 text-amber-550" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.2"/>
                     </svg>
-                    <p class="text-sm text-zinc-555">Querying security feeds database...</p>
+                    <p class="text-xs sm:text-sm text-zinc-555">Querying security feeds database...</p>
                 </div>
             </template>
 
@@ -230,7 +230,7 @@
                         </svg>
                     </div>
                     <h3 class="text-base font-bold text-white mb-1">No CVE entries found</h3>
-                    <p class="text-xs text-[#9CA3AF] max-w-sm text-center">No advisories match your current filter parameters. Try adjusting vendor checkmarks or enabling deployment flags.</p>
+                    <p class="text-[10px] sm:text-xs text-[#9CA3AF] max-w-sm text-center">No advisories match your current filter parameters. Try adjusting vendor checkmarks or enabling deployment flags.</p>
                 </div>
             </template>
 
@@ -242,83 +242,83 @@
                              class="bg-[#17171C] border border-[#26262F] hover:border-[#3F3F4E] hover:shadow-[0_0_15px_rgba(245,158,11,0.02)] cursor-pointer rounded-2xl overflow-hidden transition-all duration-200 flex flex-col group shadow-lg">
                             
                             <!-- Card Header Info -->
-                            <div class="p-5 border-b border-[#26262F] bg-[#17171C]/40 flex items-start justify-between gap-4">
-                                <div class="space-y-1">
+                            <div class="p-3 sm:p-5 border-b border-[#26262F] bg-[#17171C]/40 flex items-start justify-between gap-2 sm:gap-4">
+                                <div class="space-y-0.5">
                                     <div class="flex items-center gap-2">
-                                        <span class="text-lg font-black tracking-tight text-white font-mono" x-text="cve.cve_id"></span>
-                                        <span class="text-[9px] font-extrabold tracking-wider px-2 py-0.5 rounded-full text-white"
+                                        <span class="text-sm sm:text-lg font-black tracking-tight text-white font-mono" x-text="cve.cve_id"></span>
+                                        <span class="text-[8px] sm:text-[9px] font-extrabold tracking-wider px-2 py-0.5 rounded-full text-white"
                                               :class="cve.severity.toLowerCase() === 'critical' ? 'bg-rose-600' : (cve.severity.toLowerCase() === 'high' ? 'bg-amber-600' : (cve.severity.toLowerCase() === 'unknown' ? 'bg-zinc-600' : 'bg-blue-600'))"
                                               x-text="cve.severity.toUpperCase()"></span>
                                     </div>
-                                    <div class="text-[10px] text-zinc-500 font-mono" x-text="formatDate(cve.publish_date)"></div>
-                                    <div class="text-[10px] uppercase font-bold tracking-wider text-[#9CA3AF] font-mono"
+                                    <div class="text-[8px] sm:text-[9px] text-zinc-500 font-mono" x-text="formatDate(cve.publish_date)"></div>
+                                    <div class="text-[8px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] font-mono"
                                          x-text="cve.vendor.toUpperCase() + ' / ' + cve.product.toUpperCase()"></div>
                                 </div>
 
                                 <!-- EPSS and CVSS Score metrics on the right side -->
-                                <div class="flex items-center gap-4 select-none">
+                                <div class="flex items-center gap-2 sm:gap-4 select-none">
                                     <div class="text-right">
-                                        <div class="text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] font-mono">EPSS Threat</div>
-                                        <div class="text-base font-extrabold text-white font-mono" x-text="(cve.epss_score * 100).toFixed(1) + '%'"></div>
+                                        <div class="text-[7px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] font-mono">EPSS Threat</div>
+                                        <div class="text-sm sm:text-base font-extrabold text-white font-mono" x-text="(cve.epss_score * 100).toFixed(1) + '%'"></div>
                                     </div>
-                                    <div class="text-right border-l border-[#26262F] pl-4">
-                                        <div class="text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] font-mono">CVSS</div>
-                                        <div class="text-lg font-black font-mono" :class="getCVSSColor(cve.cvss_score)" x-text="cve.cvss_score.toFixed(1)"></div>
+                                    <div class="text-right border-l border-[#26262F] pl-2 sm:pl-4">
+                                        <div class="text-[7px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] font-mono">CVSS</div>
+                                        <div class="text-sm sm:text-lg font-black font-mono" :class="getCVSSColor(cve.cvss_score)" x-text="cve.cvss_score.toFixed(1)"></div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Status & Threat Micro-badges Row (Streamlined & Low-Profile) -->
-                            <div class="px-5 py-2.5 bg-[#121216]/40 border-b border-[#26262F] flex flex-wrap gap-3 min-h-[37px]">
+                            <!-- Status & Threat Micro-badges Row -->
+                            <div class="px-3 sm:px-5 py-1.5 sm:py-2.5 bg-[#121216]/40 border-b border-[#26262F] flex flex-wrap gap-2 sm:gap-3 min-h-[28px] sm:min-h-[37px]">
                                 <template x-if="cve.impacted_releases && cve.impacted_releases.length > 0">
-                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 py-0.5 select-none">
+                                    <span class="inline-flex items-center gap-1 text-[7px] sm:text-[9px] font-bold text-emerald-400 py-0.5 select-none">
                                         ✓ Multi-Pass Validated
                                     </span>
                                 </template>
                                 <template x-if="cve.internet_scanning_active === 1">
-                                    <span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-rose-400 py-0.5 select-none animate-pulse">
+                                    <span class="inline-flex items-center gap-1 text-[7px] sm:text-[9px] font-extrabold text-rose-400 py-0.5 select-none animate-pulse">
                                         ⚠️ Active Exploitation
                                     </span>
                                 </template>
                                 <template x-if="cve.public_poc_exists === 1">
-                                    <span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-400 py-0.5 select-none">
+                                    <span class="inline-flex items-center gap-1 text-[7px] sm:text-[9px] font-extrabold text-amber-400 py-0.5 select-none">
                                         ★ Public PoC Available
                                     </span>
                                 </template>
                             </div>
 
                             <!-- Summary and details -->
-                            <div class="p-5 flex-1 flex flex-col space-y-4">
-                                <p class="text-xs text-zinc-300 leading-relaxed font-normal line-clamp-2 h-9" x-text="cve.summary"></p>
+                            <div class="p-3 sm:p-5 flex-1 flex flex-col space-y-2 sm:space-y-4">
+                                <p class="text-[8px] sm:text-xs text-zinc-300 leading-relaxed font-normal line-clamp-2 h-6 sm:h-9" x-text="cve.summary"></p>
                                 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-[#26262F]/60">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 pt-2 sm:pt-3 border-t border-[#26262F]/60">
                                     <!-- Left Column: Impacted Releases -->
-                                    <div class="space-y-1">
-                                        <h4 class="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] select-none">Impacted Releases</h4>
-                                        <div class="flex flex-wrap gap-1 mt-1">
+                                    <div class="space-y-0.5">
+                                        <h4 class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] select-none">Impacted Releases</h4>
+                                        <div class="flex flex-wrap gap-0.5 mt-0.5">
                                             <template x-for="rel in (isExpanded(cve) ? cve.impacted_releases : cve.impacted_releases.slice(0, releasesLimit))" :key="rel">
-                                                <span class="text-[9px] font-mono font-semibold border border-rose-500/25 bg-rose-500/5 text-rose-400 px-1.5 py-0.5 rounded" x-text="rel"></span>
+                                                <span class="text-[7px] sm:text-[9px] font-mono font-semibold border border-rose-500/25 bg-rose-500/5 text-rose-400 px-1 py-0.5 rounded" x-text="rel"></span>
                                             </template>
                                             <template x-if="cve.impacted_releases && cve.impacted_releases.length > releasesLimit">
-                                                <button @click="toggleReleases(cve)" class="text-[9px] font-mono font-semibold text-amber-500 hover:text-amber-400 px-1.5 py-0.5 rounded transition" x-text="isExpanded(cve) ? 'Show less' : '+' + (cve.impacted_releases.length - releasesLimit) + ' more'"></button>
+                                                <button @click="toggleReleases(cve)" class="text-[7px] sm:text-[9px] font-mono font-semibold text-amber-500 hover:text-amber-400 px-1 py-0.5 rounded transition" x-text="isExpanded(cve) ? 'Show less' : '+' + (cve.impacted_releases.length - releasesLimit) + ' more'"></button>
                                             </template>
                                         </div>
                                         <template x-if="cve.impacted_versions.fixed">
-                                            <div class="text-[11px] text-emerald-400 font-semibold mt-1">
+                                            <div class="text-[8px] sm:text-[10px] text-emerald-400 font-semibold mt-0.5">
                                                 Fixed in: <span class="font-mono" x-text="cve.impacted_versions.fixed"></span>
                                             </div>
                                         </template>
                                     </div>
 
                                     <!-- Right Column: Exploitation Conditions -->
-                                    <div class="space-y-1">
-                                        <h4 class="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] select-none">Exploitation Conditions</h4>
-                                        <div class="flex flex-wrap gap-1 mt-1">
+                                    <div class="space-y-0.5">
+                                        <h4 class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] select-none">Exploitation Conditions</h4>
+                                        <div class="flex flex-wrap gap-0.5 mt-0.5">
                                             <template x-if="cve.conditions.length === 0">
-                                                <span class="text-[10px] text-[#9CA3AF] italic">None required</span>
+                                                <span class="text-[8px] sm:text-[9px] text-[#9CA3AF] italic">None required</span>
                                             </template>
                                             <template x-for="cond in cve.conditions" :key="cond">
-                                                <span class="text-[9px] font-semibold bg-[#26262F]/60 text-[#9CA3AF] px-2 py-0.5 rounded border border-[#26262F]"
+                                                <span class="text-[7px] sm:text-[9px] font-semibold bg-[#26262F]/60 text-[#9CA3AF] px-1.5 py-0.5 rounded border border-[#26262F]"
                                                       x-text="conditionMap[cond] || cond"></span>
                                             </template>
                                         </div>
@@ -344,7 +344,7 @@
              class="bg-[#17171C] border border-[#3F3F4E] rounded-3xl w-full max-w-[96vw] sm:max-w-[95vw] lg:max-w-7xl p-4 sm:p-6 shadow-2xl relative max-h-[95vh] overflow-y-auto flex flex-col space-y-5">
              
             <!-- Close button & Floated Publish Date -->
-            <span class="absolute top-6 right-16 text-xs text-[#9CA3AF] font-mono hidden sm:inline select-none">
+            <span class="absolute top-6 right-16 text-[10px] sm:text-xs text-[#9CA3AF] font-mono hidden sm:inline select-none">
                 Published Advisory: <span class="text-zinc-300 font-semibold" x-text="selectedCVE ? formatDate(selectedCVE.publish_date) : ''"></span>
             </span>
             <button @click="selectedCVE = null" class="absolute top-6 right-6 text-[#9CA3AF] hover:text-white transition focus:outline-none">
@@ -356,11 +356,11 @@
             <!-- Header block -->
             <div class="space-y-1 select-none">
                 <div class="flex flex-wrap items-center gap-3">
-                    <span class="text-xl sm:text-2xl lg:text-3xl font-black font-mono tracking-tight text-white" x-text="selectedCVE?.cve_id"></span>
-                    <span class="text-xs uppercase font-extrabold tracking-wider px-3 py-1 rounded-full text-white"
+                    <span class="text-lg sm:text-xl lg:text-3xl font-black font-mono tracking-tight text-white" x-text="selectedCVE?.cve_id"></span>
+                    <span class="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider px-3 py-1 rounded-full text-white"
                           :class="selectedCVE?.severity.toLowerCase() === 'critical' ? 'bg-rose-600' : (selectedCVE?.severity.toLowerCase() === 'high' ? 'bg-amber-600' : (selectedCVE?.severity.toLowerCase() === 'unknown' ? 'bg-zinc-600' : 'bg-blue-600'))"
                           x-text="selectedCVE?.severity"></span>
-                    <span class="text-xs bg-[#0E0E11] text-[#9CA3AF] border border-[#26262F] px-3 py-1 rounded-full font-bold uppercase tracking-wider"
+                    <span class="text-[10px] sm:text-xs bg-[#0E0E11] text-[#9CA3AF] border border-[#26262F] px-3 py-1 rounded-full font-bold uppercase tracking-wider"
                           x-text="selectedCVE ? (selectedCVE.vendor.toUpperCase() + ' / ' + selectedCVE.product.toUpperCase()) : ''"></span>
                 </div>
             </div>
@@ -374,25 +374,25 @@
                     <!-- 1. Quick Metrics Panel (Borderless Row) -->
                     <div class="flex flex-wrap gap-4 sm:gap-8 py-3 border-b border-[#26262F] select-none">
                         <div>
-                            <div class="text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">CVSS v3 Score</div>
+                            <div class="text-[8px] sm:text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">CVSS v3 Score</div>
                             <div class="text-xl font-black text-white font-mono mt-0.5" :class="selectedCVE ? getCVSSColor(selectedCVE.cvss_score) : ''" x-text="selectedCVE?.cvss_score.toFixed(1)"></div>
                         </div>
                         <div class="sm:border-l sm:border-[#26262F] sm:pl-8">
-                            <div class="text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">Impacted Version Range</div>
-                            <div class="text-sm font-bold text-rose-400 font-mono mt-1 flex items-center gap-1.5">
-                                <span class="border border-rose-500/20 bg-rose-500/5 px-2 py-0.5 rounded text-[11px]" x-text="selectedCVE?.impacted_versions.min || 'Unspecified'"></span>
-                                <span class="text-zinc-550 text-xs">to</span>
-                                <span class="border border-rose-500/20 bg-rose-500/5 px-2 py-0.5 rounded text-[11px]" x-text="selectedCVE?.impacted_versions.max || 'Unspecified'"></span>
+                            <div class="text-[8px] sm:text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">Impacted Version Range</div>
+                            <div class="text-xs sm:text-sm font-bold text-rose-400 font-mono mt-1 flex items-center gap-1.5">
+                                <span class="border border-rose-500/20 bg-rose-500/5 px-2 py-0.5 rounded text-[10px] sm:text-[11px]" x-text="selectedCVE?.impacted_versions.min || 'Unspecified'"></span>
+                                <span class="text-zinc-550 text-[10px] sm:text-xs">to</span>
+                                <span class="border border-rose-500/20 bg-rose-500/5 px-2 py-0.5 rounded text-[10px] sm:text-[11px]" x-text="selectedCVE?.impacted_versions.max || 'Unspecified'"></span>
                             </div>
                         </div>
                         <div class="sm:border-l sm:border-[#26262F] sm:pl-8">
-                            <div class="text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">Fixed Version</div>
-                            <div class="text-sm font-extrabold text-emerald-400 font-mono mt-1.5">
+                            <div class="text-[8px] sm:text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">Fixed Version</div>
+                            <div class="text-xs sm:text-sm font-extrabold text-emerald-400 font-mono mt-1.5">
                                 <template x-if="selectedCVE?.impacted_versions.fixed">
                                     <span x-text="selectedCVE.impacted_versions.fixed"></span>
                                 </template>
                                 <template x-if="!selectedCVE?.impacted_versions.fixed && selectedCVE?.remediation?.includes('Upgrade to')">
-                                    <span class="text-[11px] font-bold text-amber-400">See Remediation ↓</span>
+                                    <span class="text-[10px] sm:text-[11px] font-bold text-amber-400">See Remediation ↓</span>
                                 </template>
                                 <template x-if="!selectedCVE?.impacted_versions.fixed && !selectedCVE?.remediation?.includes('Upgrade to')">
                                     <span>No patch released</span>
@@ -404,10 +404,10 @@
                     <!-- 2. EPSS Threat Panel (Single Row Progress bar) -->
                     <div class="py-3.5 border-b border-[#26262F] flex items-center justify-between select-none">
                         <div>
-                            <div class="text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">First.org EPSS Probability</div>
+                            <div class="text-[8px] sm:text-[9px] uppercase font-extrabold tracking-wider text-[#9CA3AF] font-mono">First.org EPSS Probability</div>
                             <div class="text-base font-black text-white mt-1">
                                 <span :class="selectedCVE ? getEPSSColor(selectedCVE.epss_score) : ''" x-text="selectedCVE ? (selectedCVE.epss_score * 100).toFixed(2) + '%' : ''"></span>
-                                <span class="text-xs font-semibold text-[#9CA3AF] ml-1">Exploit Likelihood</span>
+                                <span class="text-[10px] sm:text-xs font-semibold text-[#9CA3AF] ml-1">Exploit Likelihood</span>
                             </div>
                         </div>
                         <div class="w-32 sm:w-48 bg-zinc-800 rounded-full h-1 overflow-hidden">
@@ -418,13 +418,13 @@
                     <!-- 3. Vulnerability Overview & Remediation -->
                     <div class="space-y-5">
                         <div class="space-y-1.5">
-                            <h4 class="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Vulnerability Overview</h4>
-                            <p class="text-xs text-zinc-300 leading-relaxed font-normal" x-text="selectedCVE?.summary"></p>
+                            <h4 class="text-[9px] sm:text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Vulnerability Overview</h4>
+                            <p class="text-[10px] sm:text-xs text-zinc-300 leading-relaxed font-normal" x-text="selectedCVE?.summary"></p>
                         </div>
                         
                         <div class="space-y-2">
-                            <h4 class="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Remediation Steps &amp; Workarounds</h4>
-                            <div class="prose prose-invert max-w-none text-zinc-300 text-xs leading-relaxed" 
+                            <h4 class="text-[9px] sm:text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Remediation Steps &amp; Workarounds</h4>
+                            <div class="prose prose-invert max-w-none text-zinc-300 text-[10px] sm:text-xs leading-relaxed" 
                                  x-html="selectedCVE ? renderMarkdown(selectedCVE.remediation) : ''"></div>
                         </div>
                     </div>
@@ -432,11 +432,11 @@
                     <!-- 4. Technical Sources & Threat Actor Tags -->
                     <div class="space-y-4 pt-4 border-t border-[#26262F]">
                         <div class="space-y-2">
-                            <h5 class="text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] select-none">Cited Technical Sources</h5>
-                            <div class="flex flex-wrap gap-2 text-xs">
+                            <h5 class="text-[8px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] select-none">Cited Technical Sources</h5>
+                            <div class="flex flex-wrap gap-2 text-[10px] sm:text-xs">
                                 <template x-for="src in selectedCVE?.sources" :key="src.url">
                                     <a :href="src.url" target="_blank" rel="noopener noreferrer" 
-                                       class="flex items-center gap-1.5 bg-[#26262F]/40 hover:bg-[#26262F]/80 px-2.5 py-1 rounded border border-[#26262F] text-[#9CA3AF] hover:text-amber-500 transition shadow-sm font-semibold select-none text-[10px]">
+                                       class="flex items-center gap-1.5 bg-[#26262F]/40 hover:bg-[#26262F]/80 px-2.5 py-1 rounded border border-[#26262F] text-[#9CA3AF] hover:text-amber-500 transition shadow-sm font-semibold select-none text-[9px] sm:text-[10px]">
                                         <span x-text="src.label"></span>
                                         <svg class="h-3 w-3 text-zinc-650" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
@@ -449,10 +449,10 @@
                         <div class="flex flex-wrap gap-6 pt-3 border-t border-[#26262F]/50">
                             <!-- Observed Threat Groups -->
                             <div class="space-y-1.5 flex-1 min-w-[150px]" x-show="selectedCVE && selectedCVE.malware_families && selectedCVE.malware_families.length > 0">
-                                <h5 class="text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] select-none">Observed Threat Groups</h5>
+                                <h5 class="text-[8px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] select-none">Observed Threat Groups</h5>
                                 <div class="flex flex-wrap gap-1.5">
                                     <template x-for="malware in selectedCVE?.malware_families" :key="malware">
-                                        <span class="text-[9px] font-extrabold bg-rose-950/40 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20 select-none uppercase tracking-wide flex items-center gap-1 shadow-inner">
+                                        <span class="text-[8px] sm:text-[9px] font-extrabold bg-rose-950/40 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20 select-none uppercase tracking-wide flex items-center gap-1 shadow-inner">
                                             <span class="w-1 h-1 rounded-full bg-rose-500 animate-ping"></span>
                                             <span x-text="malware"></span>
                                         </span>
@@ -462,13 +462,13 @@
                             
                             <!-- Required Prerequisites -->
                             <div class="space-y-1.5 flex-1 min-w-[150px]">
-                                <h5 class="text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] select-none">Required Prerequisites</h5>
+                                <h5 class="text-[8px] sm:text-[9px] uppercase font-bold tracking-wider text-[#9CA3AF] select-none">Required Prerequisites</h5>
                                 <div class="flex flex-wrap gap-1.5">
                                     <template x-if="selectedCVE && selectedCVE.conditions.length === 0">
-                                        <span class="text-[10px] text-[#9CA3AF] italic select-none">None required (Default baseline)</span>
+                                        <span class="text-[9px] sm:text-[10px] text-[#9CA3AF] italic select-none">None required (Default baseline)</span>
                                     </template>
                                     <template x-for="cond in selectedCVE?.conditions" :key="cond">
-                                        <span class="text-[9px] font-semibold border border-[#3F3F4E] bg-transparent text-[#9CA3AF] px-2.5 py-1 rounded"
+                                        <span class="text-[8px] sm:text-[9px] font-semibold border border-[#3F3F4E] bg-transparent text-[#9CA3AF] px-2.5 py-1 rounded"
                                               x-text="conditionMap[cond] || cond"></span>
                                     </template>
                                 </div>
@@ -484,7 +484,7 @@
                     <!-- AI Insight Card -->
                     <div class="bg-[#0A0A0D] border border-[#26262F] rounded-2xl p-5 flex flex-col space-y-4">
                         <div class="flex items-center justify-between select-none">
-                            <span class="text-[10px] font-extrabold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <span class="text-[9px] sm:text-[10px] font-extrabold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
                                 AI Insight
                             </span>
                             <span class="text-[7px] font-bold text-zinc-600 uppercase">DeepSeek V4 Flash</span>
@@ -502,7 +502,7 @@
                         <!-- Generated summary -->
                         <template x-if="!aiSummaryGenerating && selectedCVEAISummary?.ai_summary">
                             <div class="space-y-2">
-                                <p class="text-[11px] text-zinc-300 leading-relaxed" x-text="selectedCVEAISummary.ai_summary"></p>
+                                <p class="text-[10px] sm:text-[11px] text-zinc-300 leading-relaxed" x-text="selectedCVEAISummary.ai_summary"></p>
                                 <div class="text-[7px] text-zinc-650" x-text="'Generated ' + (selectedCVEAISummary.generated_at || '')"></div>
                             </div>
                         </template>
@@ -510,16 +510,16 @@
                         <!-- Not generated yet -->
                         <template x-if="!aiSummaryGenerating && !selectedCVEAISummary?.ai_summary && !aiSummaryLoading">
                             <div class="flex flex-col items-center gap-3 py-2">
-                                <p class="text-[10px] text-[#9CA3AF] text-center">Ask the AI to analyze this CVE and fill knowledge gaps</p>
-                                <button @click="generateAISummary()" class="text-[10px] font-bold text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 hover:border-violet-500/50 px-4 py-2 rounded-xl transition">Generate AI Insight</button>
+                                <p class="text-[9px] sm:text-[10px] text-[#9CA3AF] text-center">Ask the AI to analyze this CVE and fill knowledge gaps</p>
+                                <button @click="generateAISummary()" class="text-[9px] sm:text-[10px] font-bold text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 hover:border-violet-500/50 px-4 py-2 rounded-xl transition">Generate AI Insight</button>
                             </div>
                         </template>
 
                         <!-- Error state -->
                         <template x-if="aiSummaryError">
                             <div class="flex flex-col items-center gap-2 py-2">
-                                <p class="text-[10px] text-rose-400 text-center" x-text="aiSummaryError"></p>
-                                <button @click="generateAISummary()" class="text-[9px] font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3 py-1.5 rounded-lg border border-rose-500/30 transition">Retry</button>
+                                <p class="text-[9px] sm:text-[10px] text-rose-400 text-center" x-text="aiSummaryError"></p>
+                                <button @click="generateAISummary()" class="text-[8px] sm:text-[9px] font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3 py-1.5 rounded-lg border border-rose-500/30 transition">Retry</button>
                             </div>
                         </template>
                     </div>
@@ -529,19 +529,19 @@
                         
                         <!-- Stepper header -->
                         <div class="flex flex-col select-none border-b border-[#26262F] pb-2">
-                            <span class="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                                 ✓ MULTI-PASS VALIDATED
                             </span>
-                            <span class="text-[9px] text-[#9CA3AF] font-mono mt-0.5" x-text="`Last Sync: ${selectedCVEValidation?.validated_at || ''}`"></span>
+                            <span class="text-[8px] sm:text-[9px] text-[#9CA3AF] font-mono mt-0.5" x-text="`Last Sync: ${selectedCVEValidation?.validated_at || ''}`"></span>
                         </div>
                         
                         <!-- The Stepper Pipeline timeline -->
-                        <div class="space-y-2 font-sans text-xs select-none">
+                        <div class="space-y-2 font-sans text-[10px] sm:text-xs select-none">
                             <!-- Pass 1 -->
                             <div class="space-y-0.5">
                                 <div class="flex items-center space-x-2.5">
-                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[9px] font-extrabold shrink-0">✓</div>
-                                    <span class="font-bold text-white text-[11px]">Pass 1: Upstream Sync</span>
+                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[8px] sm:text-[9px] font-extrabold shrink-0">✓</div>
+                                    <span class="font-bold text-white text-[10px] sm:text-[11px]">Pass 1: Upstream Sync</span>
                                 </div>
                                 <p class="text-[8px] text-zinc-600 ml-6.5">Cross-checks against CISA KEV and NIST NVD catalogs</p>
                             </div>
@@ -549,8 +549,8 @@
                             <!-- Pass 2 -->
                             <div class="space-y-0.5">
                                 <div class="flex items-center space-x-2.5">
-                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[9px] font-extrabold shrink-0">✓</div>
-                                    <span class="font-bold text-white text-[11px]">Pass 2: Schema Integrity</span>
+                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[8px] sm:text-[9px] font-extrabold shrink-0">✓</div>
+                                    <span class="font-bold text-white text-[10px] sm:text-[11px]">Pass 2: Schema Integrity</span>
                                 </div>
                                 <p class="text-[8px] text-zinc-600 ml-6.5">Validates formatting, CVSS bounds, metadata completeness</p>
                             </div>
@@ -558,8 +558,8 @@
                             <!-- Pass 3 -->
                             <div class="space-y-0.5">
                                 <div class="flex items-center space-x-2.5">
-                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[9px] font-extrabold shrink-0">✓</div>
-                                    <span class="font-bold text-white text-[11px]">Pass 3: Version Range Logic</span>
+                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[8px] sm:text-[9px] font-extrabold shrink-0">✓</div>
+                                    <span class="font-bold text-white text-[10px] sm:text-[11px]">Pass 3: Version Range Logic</span>
                                 </div>
                                 <p class="text-[8px] text-zinc-600 ml-6.5">Version boundary integrity and patch-level correctness</p>
                             </div>
@@ -567,8 +567,8 @@
                             <!-- Pass 4 -->
                             <div class="space-y-0.5">
                                 <div class="flex items-center space-x-2.5">
-                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[9px] font-extrabold shrink-0">✓</div>
-                                    <span class="font-bold text-white text-[11px]">Pass 4: Condition Audit</span>
+                                    <div class="h-4 w-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/40 text-[8px] sm:text-[9px] font-extrabold shrink-0">✓</div>
+                                    <span class="font-bold text-white text-[10px] sm:text-[11px]">Pass 4: Condition Audit</span>
                                 </div>
                                 <p class="text-[8px] text-zinc-600 ml-6.5">Audits prerequisite conditions against advisory texts</p>
                             </div>
@@ -576,10 +576,10 @@
                             <!-- Pass 5: dynamic -->
                             <div class="space-y-0.5">
                                 <div class="flex items-center space-x-2.5">
-                                    <div class="h-4 w-4 rounded-full flex items-center justify-center border text-[9px] font-extrabold shrink-0"
+                                    <div class="h-4 w-4 rounded-full flex items-center justify-center border text-[8px] sm:text-[9px] font-extrabold shrink-0"
                                          :class="(selectedCVE?.impacted_versions?.min || selectedCVE?.impacted_versions?.max) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/10 text-rose-400 border-rose-500/40'"
                                          x-text="(selectedCVE?.impacted_versions?.min || selectedCVE?.impacted_versions?.max) ? '✓' : '✗'"></div>
-                                    <span class="font-bold text-white text-[11px]">Pass 5: Version Affected &amp; Fixed</span>
+                                    <span class="font-bold text-white text-[10px] sm:text-[11px]">Pass 5: Version Affected &amp; Fixed</span>
                                 </div>
                                 <p class="text-[8px] text-zinc-600 ml-6.5">Affected-version range and fixed-release data</p>
                             </div>
